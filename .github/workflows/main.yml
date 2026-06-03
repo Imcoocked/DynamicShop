@@ -17,6 +17,17 @@ jobs:
         run: |
           find src -name "DynamicShopExpansion.java" -exec \
             sed -i 's/getPluginMeta()\.getVersion()/getDescription().getVersion()/g' {} +
+      - name: Install CoinsEngine locally
+        run: |
+          curl -L --retry 3 --retry-delay 5 \
+            "https://repo.nightexpressdev.com/releases/su/nightexpress/coinsengine/CoinsEngine/2.6.0/CoinsEngine-2.6.0.jar" \
+            -o CoinsEngine.jar
+          mvn install:install-file \
+            -Dfile=CoinsEngine.jar \
+            -DgroupId=su.nightexpress.coinsengine \
+            -DartifactId=CoinsEngine \
+            -Dversion=2.6.0 \
+            -Dpackaging=jar
       - name: Build
         run: mvn package -B -DskipTests
       - name: Upload artifact
