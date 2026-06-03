@@ -25,19 +25,15 @@ jobs:
         run: |
           FILE=$(find src -name "ShopDataManager.java")
           echo "Patching $FILE"
-
           sed -i 's|import io.papermc.paper.threadedregions.scheduler.ScheduledTask;|import org.bukkit.scheduler.BukkitTask;|g' "$FILE"
           sed -i 's/public static ScheduledTask saveTimer;/public static BukkitTask saveTimer;/g' "$FILE"
           sed -i 's/private static ScheduledTask shortageTicker;/private static BukkitTask shortageTicker;/g' "$FILE"
-
           perl -i -0pe '
             s/plugin\.getServer\(\)\.getGlobalRegionScheduler\(\)\.runAtFixedRate\(\s*\n?\s*plugin,\s*task\s*->\s*saveQueuedItems\(\),\s*([^,]+),\s*([^)]+)\)/Bukkit.getScheduler().runTaskTimer(plugin, () -> saveQueuedItems(), $1, $2)/g
           ' "$FILE"
-
           perl -i -0pe '
             s/plugin\.getServer\(\)\.getGlobalRegionScheduler\(\)\.runAtFixedRate\(\s*\n?\s*plugin,\s*task\s*->\s*tickAllShortage\(\),\s*([^,]+),\s*([^)]+)\)/Bukkit.getScheduler().runTaskTimer(plugin, () -> tickAllShortage(), $1, $2)/g
           ' "$FILE"
-
           echo "Verifying ShopDataManager clean:"
           grep -n "GlobalRegionScheduler\|ScheduledTask" "$FILE" || echo "Clean!"
 
@@ -45,16 +41,11 @@ jobs:
         run: |
           FILE=$(find src -name "DynamicShop.java")
           echo "Patching $FILE"
-
           # Fix Nexo block: getGlobalRegionScheduler().runDelayed → Bukkit.getScheduler().runTaskLater
+          # The closing `}, 1L);` is intentionally kept - runTaskLater requires the delay as its third argument
           sed -i 's/getServer()\.getGlobalRegionScheduler()\.runDelayed(this, task -> {/Bukkit.getScheduler().runTaskLater(this, () -> {/g' "$FILE"
-          # Remove the extra closing argument (`, 1L)` becomes just `)`)
-          # The line looks like: `            }, 1L);  // 1 tick after all plugins are done`
-          sed -i 's/}, 1L);  \/\/ 1 tick after all plugins are done/});  \/\/ 1 tick after all plugins are done/g' "$FILE"
-
           # Wrap ShopDialogManager instantiation in try-catch to survive missing DialogAction
           sed -i 's/this\.shopDialogManager = new org\.minecraftsmp\.dynamicshop\.gui\.ShopDialogManager(this);/try { this.shopDialogManager = new org.minecraftsmp.dynamicshop.gui.ShopDialogManager(this); } catch (NoClassDefFoundError e) { getLogger().warning("[DynamicShop] Dialog GUI unavailable on this server version - disabled."); this.shopDialogManager = null; }/g' "$FILE"
-
           echo "Verifying DynamicShop clean:"
           grep -n "GlobalRegionScheduler" "$FILE" || echo "Clean!"
 
@@ -62,19 +53,10 @@ jobs:
         run: |
           FILE=$(find src -name "ChatInputListener.java")
           echo "Patching $FILE"
-
-          # Replace Paper import with Bukkit import
           sed -i 's|import io.papermc.paper.event.player.AsyncChatEvent;|import org.bukkit.event.player.AsyncPlayerChatEvent;|g' "$FILE"
-
-          # Remove PlainTextComponentSerializer import (no longer needed)
           sed -i '/import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;/d' "$FILE"
-
-          # Replace event type in handler
           sed -i 's/public void onChat(AsyncChatEvent event)/public void onChat(AsyncPlayerChatEvent event)/g' "$FILE"
-
-          # Replace message extraction (Component → plain String)
           sed -i 's/String input = PlainTextComponentSerializer\.plainText()\.serialize(event\.message())\.trim();/String input = event.getMessage().trim();/g' "$FILE"
-
           echo "Verifying ChatInputListener clean:"
           grep -n "AsyncChatEvent\|PlainTextComponentSerializer" "$FILE" || echo "Clean!"
 
@@ -82,16 +64,11 @@ jobs:
         run: |
           FILE=$(find src -name "ShopListener.java")
           echo "Patching $FILE"
-
-          # Remove Paper-only registry imports
           sed -i '/import io.papermc.paper.registry.RegistryAccess;/d' "$FILE"
           sed -i '/import io.papermc.paper.registry.RegistryKey;/d' "$FILE"
-
-          # Replace RegistryAccess usage with standard Bukkit Enchantment.values()
           sed -i 's/var registry = RegistryAccess\.registryAccess()\.getRegistry(RegistryKey\.ENCHANTMENT);//g' "$FILE"
           sed -i 's/List<Enchantment> enchantments = new ArrayList<>();/List<Enchantment> enchantments = new ArrayList<>(java.util.Arrays.asList(Enchantment.values()));/g' "$FILE"
           sed -i '/registry\.forEach(enchantments::add);/d' "$FILE"
-
           echo "Verifying ShopListener clean:"
           grep -n "RegistryAccess\|RegistryKey" "$FILE" || echo "Clean!"
 
