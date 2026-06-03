@@ -83,16 +83,17 @@ jobs:
 
       - name: Patch GUI files - Component title → String for Bukkit.createInventory
         run: |
-          echo "Scanning for GUI files using Component titles..."
+          echo "Patching GUI createInventory calls..."
           find src -name "*.java" | xargs grep -l "Bukkit.createInventory" | while read FILE; do
             echo "Patching $FILE"
-            # Replace: Bukkit.createInventory(x, y, Component.text("Title"))
-            # With:    Bukkit.createInventory(x, y, "Title")
-            perl -i -0pe 's/Bukkit\.createInventory\(([^,]+),\s*([^,]+),\s*Component\.text\("([^"]+)"\)\)/Bukkit.createInventory($1, $2, "$3")/g' "$FILE"
-            # Also handle fully qualified net.kyori.adventure.text.Component.text("Title")
-            perl -i -0pe 's/Bukkit\.createInventory\(([^,]+),\s*([^,]+),\s*net\.kyori\.adventure\.text\.Component\.text\("([^"]+)"\)\)/Bukkit.createInventory($1, $2, "$3")/g' "$FILE"
+            # Pattern 1: MessageManager.parseComponent(variable, player/viewer)
+            perl -i -0pe 's/Bukkit\.createInventory\(([^,]+),\s*([^,]+),\s*MessageManager\.parseComponent\((\w+),\s*(?:player|viewer)\)\)/Bukkit.createInventory($1, $2, $3)/g' "$FILE"
+            # Pattern 2: MessageManager.parseComponent(variable)  — no second arg
+            perl -i -0pe 's/Bukkit\.createInventory\(([^,]+),\s*([^,]+),\s*MessageManager\.parseComponent\((\w+)\)\)/Bukkit.createInventory($1, $2, $3)/g' "$FILE"
+            # Pattern 3: MessageManager.parseComponent("literal" + expr)  — e.g. AdminSpecialItemEditGUI
+            perl -i -0pe 's/Bukkit\.createInventory\(([^,]+),\s*([^,]+),\s*MessageManager\.parseComponent\(("(?:[^"\\]|\\.)*"(?:\s*\+\s*[\w.()]+)*)\)\)/Bukkit.createInventory($1, $2, $3)/g' "$FILE"
             echo "Verifying $FILE:"
-            grep -n "createInventory.*Component" "$FILE" || echo "Clean!"
+            grep -n "createInventory.*parseComponent\|createInventory.*Component" "$FILE" || echo "Clean!"
           done
 
       - name: Install CoinsEngine locally
