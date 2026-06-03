@@ -60,17 +60,32 @@ jobs:
           echo "Verifying ChatInputListener clean:"
           grep -n "AsyncChatEvent\|PlainTextComponentSerializer" "$FILE" || echo "Clean!"
 
-      - name: Patch ShopListener - RegistryAccess → Enchantment.values()
+      - name: Patch ShopListener - RegistryAccess → Enchantment.values() + remove ScheduledTask import
         run: |
           FILE=$(find src -name "ShopListener.java")
           echo "Patching $FILE"
           sed -i '/import io.papermc.paper.registry.RegistryAccess;/d' "$FILE"
           sed -i '/import io.papermc.paper.registry.RegistryKey;/d' "$FILE"
+          sed -i '/import io.papermc.paper.threadedregions.scheduler.ScheduledTask;/d' "$FILE"
+          sed -i '/import io.papermc.paper.threadedregions/d' "$FILE"
           sed -i 's/var registry = RegistryAccess\.registryAccess()\.getRegistry(RegistryKey\.ENCHANTMENT);//g' "$FILE"
           sed -i 's/List<Enchantment> enchantments = new ArrayList<>();/List<Enchantment> enchantments = new ArrayList<>(java.util.Arrays.asList(Enchantment.values()));/g' "$FILE"
           sed -i '/registry\.forEach(enchantments::add);/d' "$FILE"
           echo "Verifying ShopListener clean:"
-          grep -n "RegistryAccess\|RegistryKey" "$FILE" || echo "Clean!"
+          grep -n "RegistryAccess\|RegistryKey\|ScheduledTask\|threadedregions" "$FILE" || echo "Clean!"
+
+      - name: Patch UpdateChecker - Folia AsyncScheduler → Bukkit async scheduler
+        run: |
+          FILE=$(find src -name "UpdateChecker.java")
+          echo "Patching $FILE"
+          # Remove Folia scheduler imports
+          sed -i '/import io.papermc.paper.threadedregions/d' "$FILE"
+          # Replace getAsyncScheduler().runNow(plugin, task -> with Bukkit async equivalent
+          sed -i 's/Bukkit\.getAsyncScheduler()\.runNow(\s*plugin,\s*task\s*->/Bukkit.getScheduler().runTaskAsynchronously(plugin, ()/g' "$FILE"
+          # Handle any getAsyncScheduler().runDelayed variants
+          sed -i 's/Bukkit\.getAsyncScheduler()\.runDelayed(\s*plugin,\s*task\s*->/Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, ()/g' "$FILE"
+          echo "Verifying UpdateChecker clean:"
+          grep -n "getAsyncScheduler\|threadedregions" "$FILE" || echo "Clean!"
 
       - name: Install CoinsEngine locally
         run: |
