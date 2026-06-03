@@ -41,9 +41,7 @@ jobs:
         run: |
           FILE=$(find src -name "DynamicShop.java")
           echo "Patching $FILE"
-          # The closing `}, 1L);` is intentionally kept - runTaskLater requires the delay as its third argument
           sed -i 's/getServer()\.getGlobalRegionScheduler()\.runDelayed(this, task -> {/Bukkit.getScheduler().runTaskLater(this, () -> {/g' "$FILE"
-          # Wrap ShopDialogManager instantiation in try-catch to survive missing DialogAction
           sed -i 's/this\.shopDialogManager = new org\.minecraftsmp\.dynamicshop\.gui\.ShopDialogManager(this);/try { this.shopDialogManager = new org.minecraftsmp.dynamicshop.gui.ShopDialogManager(this); } catch (NoClassDefFoundError e) { getLogger().warning("[DynamicShop] Dialog GUI unavailable on this server version - disabled."); this.shopDialogManager = null; }/g' "$FILE"
           echo "Verifying DynamicShop clean:"
           grep -n "GlobalRegionScheduler" "$FILE" || echo "Clean!"
@@ -82,6 +80,20 @@ jobs:
           sed -i 's/Bukkit\.getAsyncScheduler()\.runDelayed(plugin, task ->/Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () ->/g' "$FILE"
           echo "Verifying UpdateChecker clean:"
           grep -n "getAsyncScheduler\|threadedregions" "$FILE" || echo "Clean!"
+
+      - name: Patch GUI files - Component title → String for Bukkit.createInventory
+        run: |
+          echo "Scanning for GUI files using Component titles..."
+          find src -name "*.java" | xargs grep -l "Bukkit.createInventory" | while read FILE; do
+            echo "Patching $FILE"
+            # Replace: Bukkit.createInventory(x, y, Component.text("Title"))
+            # With:    Bukkit.createInventory(x, y, "Title")
+            perl -i -0pe 's/Bukkit\.createInventory\(([^,]+),\s*([^,]+),\s*Component\.text\("([^"]+)"\)\)/Bukkit.createInventory($1, $2, "$3")/g' "$FILE"
+            # Also handle fully qualified net.kyori.adventure.text.Component.text("Title")
+            perl -i -0pe 's/Bukkit\.createInventory\(([^,]+),\s*([^,]+),\s*net\.kyori\.adventure\.text\.Component\.text\("([^"]+)"\)\)/Bukkit.createInventory($1, $2, "$3")/g' "$FILE"
+            echo "Verifying $FILE:"
+            grep -n "createInventory.*Component" "$FILE" || echo "Clean!"
+          done
 
       - name: Install CoinsEngine locally
         run: |
