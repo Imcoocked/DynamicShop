@@ -1,6 +1,6 @@
 package org.minecraftsmp.dynamicshop.transactions;
 
-import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import org.bukkit.scheduler.BukkitTask;
 import org.minecraftsmp.dynamicshop.DynamicShop;
 
 import java.io.*;
@@ -23,7 +23,7 @@ public class TransactionLogger {
             new java.util.concurrent.ConcurrentLinkedQueue<>();
 
     // Batch update system - writes to disk periodically
-    private ScheduledTask periodicTask = null;
+    private BukkitTask periodicTask = null;
 
     public TransactionLogger(DynamicShop plugin) {
         this.plugin = plugin;
@@ -63,9 +63,9 @@ public class TransactionLogger {
             periodicTask.cancel();
         }
 
-        periodicTask = plugin.getServer().getAsyncScheduler().runAtFixedRate(
-                plugin, task -> flushPendingWrites(),
-                5, 5, java.util.concurrent.TimeUnit.SECONDS);
+        // 100 ticks = 5 seconds
+        periodicTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(
+                plugin, this::flushPendingWrites, 100L, 100L);
     }
 
     /**
@@ -419,7 +419,6 @@ public class TransactionLogger {
         return stats;
     }
 
-    // Add this method anywhere in TransactionLogger class
     public long getMostRecentTransactionTime() {
         if (recent.isEmpty()) {
             return 0L;
